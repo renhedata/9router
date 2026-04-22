@@ -19,7 +19,9 @@ import {
   getAccessToken as _getAccessToken,
   refreshTokenByProvider as _refreshTokenByProvider,
   formatProviderCredentials as _formatProviderCredentials,
-  getAllAccessTokens as _getAllAccessTokens
+  getAllAccessTokens as _getAllAccessTokens,
+  refreshKiroToken as _refreshKiroToken,
+  getRefreshLeadMs as _getRefreshLeadMs
 } from "open-sse/services/tokenRefresh.js";
 
 export const TOKEN_EXPIRY_BUFFER_MS = BUFFER_MS;
@@ -49,6 +51,9 @@ export const refreshGitHubToken = (refreshToken) =>
 
 export const refreshCopilotToken = (githubAccessToken) =>
   _refreshCopilotToken(githubAccessToken, log);
+
+export const refreshKiroToken = (refreshToken, providerSpecificData) =>
+  _refreshKiroToken(refreshToken, providerSpecificData, log);
 
 export const getAccessToken = (provider, credentials) =>
   _getAccessToken(provider, credentials, log);
@@ -192,10 +197,12 @@ export async function checkAndRefreshToken(provider, credentials) {
     const now       = Date.now();
     const remaining = expiresAt - now;
 
-    if (remaining < TOKEN_EXPIRY_BUFFER_MS) {
+    const refreshLead = _getRefreshLeadMs(provider);
+    if (remaining < refreshLead) {
       log.info("TOKEN_REFRESH", "Token expiring soon, refreshing proactively", {
         provider,
         expiresIn: Math.round(remaining / 1000),
+        refreshLeadMs: refreshLead,
       });
 
       const newCreds = await getAccessToken(provider, creds);
@@ -251,6 +258,7 @@ export async function checkAndRefreshToken(provider, credentials) {
         });
 
         creds.providerSpecificData = updatedSpecific;
+        creds.copilotToken = copilotToken.token;
       }
     }
   }

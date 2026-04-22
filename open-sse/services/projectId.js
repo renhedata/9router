@@ -1,14 +1,13 @@
 /**
  * Project ID Service - Fetch and cache real Project IDs from Google Cloud Code API
  *
- * Reference: CLIProxyAPI internal/auth/antigravity/auth.go (FetchProjectID + OnboardUser)
  *
  * Instead of generating random project IDs (e.g. "useful-spark-a1b2c"),
  * this service fetches the real Project ID bound to the authenticated user's account.
  * This significantly reduces the risk of being flagged by Google's anti-abuse systems.
  */
 
-import {CLOUD_CODE_API, LOAD_CODE_ASSIST_HEADERS, LOAD_CODE_ASSIST_METADATA} from "../config/constants.js";
+import { CLOUD_CODE_API, LOAD_CODE_ASSIST_HEADERS, LOAD_CODE_ASSIST_METADATA } from "../config/appConstants.js";
 
 // ─── Cache ────────────────────────────────────────────────────────────────────
 // connectionId -> { projectId: string, fetchedAt: number }
@@ -254,7 +253,9 @@ async function onboardUser(accessToken, tierID, externalSignal) {
                 console.warn(`[ProjectId] onboardUser failed after ${MAX_ATTEMPTS} attempts: ${error.message}`);
                 return null;
             }
-            throw error;
+            // Continue to next attempt instead of throwing (which would skip remaining retries)
+            console.warn(`[ProjectId] onboardUser attempt ${attempt} failed: ${error.message}, retrying...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
         } finally {
             clearTimeout(timeoutId);
             externalSignal?.removeEventListener("abort", forwardAbort);

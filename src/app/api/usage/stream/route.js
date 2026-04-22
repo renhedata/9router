@@ -39,12 +39,13 @@ export async function GET() {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(stats)}\n\n`));
         } catch {
           state.closed = true;
+          statsEmitter.off("update", state.send);
           statsEmitter.off("pending", state.sendPending);
+          clearInterval(state.keepalive);
         }
       };
 
       await state.send();
-      console.log(`[SSE] Client connected | listeners=${statsEmitter.listenerCount("update") + 1}`);
 
       statsEmitter.on("update", state.send);
       statsEmitter.on("pending", state.sendPending);
@@ -65,7 +66,6 @@ export async function GET() {
       statsEmitter.off("update", state.send);
       statsEmitter.off("pending", state.sendPending);
       clearInterval(state.keepalive);
-      console.log("[SSE] Client disconnected");
     },
   });
 

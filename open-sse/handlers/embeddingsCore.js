@@ -1,6 +1,6 @@
 import { getModelTargetFormat, PROVIDER_ID_TO_ALIAS } from "../config/providerModels.js";
 import { createErrorResult, parseUpstreamError, formatProviderError } from "../utils/error.js";
-import { HTTP_STATUS } from "../config/constants.js";
+import { HTTP_STATUS } from "../config/runtimeConfig.js";
 import { getExecutor } from "../executors/index.js";
 import { refreshWithRetry } from "../services/tokenRefresh.js";
 
@@ -228,12 +228,13 @@ export async function handleEmbeddingsCore({
     return createErrorResult(HTTP_STATUS.BAD_GATEWAY, errMsg);
   }
 
-  // Handle 401/403 — try token refresh
+  // Handle 401/403 — try token refresh (skip for noAuth providers)
+  const executor = getExecutor(provider);
   if (
-    providerResponse.status === HTTP_STATUS.UNAUTHORIZED ||
-    providerResponse.status === HTTP_STATUS.FORBIDDEN
+    !executor.noAuth &&
+    (providerResponse.status === HTTP_STATUS.UNAUTHORIZED ||
+    providerResponse.status === HTTP_STATUS.FORBIDDEN)
   ) {
-    const executor = getExecutor(provider);
     const newCredentials = await refreshWithRetry(
       () => executor.refreshCredentials(credentials, log),
       3,
@@ -269,7 +270,7 @@ export async function handleEmbeddingsCore({
   }
 
   if (!providerResponse.ok) {
-    const { statusCode, message } = await parseUpstreamError(providerResponse, provider);
+    const { statusCode, message } = await parseUpstreamError(providerResponse);
     const errMsg = formatProviderError(new Error(message), provider, model, statusCode);
     log?.debug?.("EMBEDDINGS", `Provider error: ${errMsg}`);
     return createErrorResult(statusCode, errMsg);

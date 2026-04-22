@@ -2,9 +2,14 @@ import pkg from "../../../package.json" with { type: "json" };
 
 // App configuration
 export const APP_CONFIG = {
-  name: "Endpoint Proxy",
+  name: "9Router proxy",
   description: "AI Infrastructure Management",
   version: pkg.version,
+};
+
+// GitHub configuration
+export const GITHUB_CONFIG = {
+  changelogUrl: "https://raw.githubusercontent.com/decolua/9router/refs/heads/master/CHANGELOG.md",
 };
 
 // Theme configuration
@@ -43,9 +48,12 @@ export const PROVIDER_ENDPOINTS = {
   minimax: "https://api.minimax.io/anthropic/v1/messages",
   "minimax-cn": "https://api.minimaxi.com/anthropic/v1/messages",
   alicode: "https://coding.dashscope.aliyuncs.com/v1/chat/completions",
+  "alicode-intl": "https://coding-intl.dashscope.aliyuncs.com/v1/chat/completions",
   openai: "https://api.openai.com/v1/chat/completions",
   anthropic: "https://api.anthropic.com/v1/messages",
   gemini: "https://generativelanguage.googleapis.com/v1beta/models",
+  ollama: "https://ollama.com/api/chat",
+  "ollama-local": "http://localhost:11434/api/chat",
 };
 
 // Re-export from providers.js for backward compatibility

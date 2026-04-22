@@ -1,7 +1,6 @@
 // Gemini helper functions for translator
 
 // Unsupported JSON Schema constraints that should be removed for Antigravity
-// Reference: CLIProxyAPI/internal/util/gemini_schema.go (removeUnsupportedKeywords)
 export const UNSUPPORTED_SCHEMA_CONSTRAINTS = [
   // Basic constraints (not supported by Gemini API)
   "minLength", "maxLength", "exclusiveMinimum", "exclusiveMaximum",
@@ -54,6 +53,10 @@ export function convertOpenAIContentToParts(content) {
             inlineData: { mime_type: mimeType, data: data }
           });
         }
+      } else if (item.type === "image_url" && item.image_url?.url && (item.image_url.url.startsWith("http://") || item.image_url.url.startsWith("https://"))) {
+        parts.push({
+          fileData: { fileUri: item.image_url.url, mimeType: "image/*" }
+        });
       }
     }
   }
@@ -138,12 +141,16 @@ function convertConstToEnum(obj) {
   }
 }
 
-// Convert enum values to strings (Gemini requires string enum values)
+// Convert enum values to strings (Gemini requires string enum values + explicit type:"string")
 function convertEnumValuesToStrings(obj) {
   if (!obj || typeof obj !== "object") return;
 
   if (obj.enum && Array.isArray(obj.enum)) {
     obj.enum = obj.enum.map(v => String(v));
+    // Gemini API requires type:"string" when enum is present — without it returns 400
+    if (!obj.type) {
+      obj.type = "string";
+    }
   }
 
   for (const value of Object.values(obj)) {
@@ -262,7 +269,6 @@ function flattenTypeArrays(obj) {
 }
 
 // Clean JSON Schema for Antigravity API compatibility - removes unsupported keywords recursively
-// Reference: CLIProxyAPI/internal/util/gemini_schema.go
 export function cleanJSONSchemaForAntigravity(schema) {
   if (!schema || typeof schema !== "object") return schema;
 

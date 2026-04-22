@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Card, Button, ModelSelectModal, ManualConfigModal } from "@/shared/components";
+import { Card, Button, ModelSelectModal, ManualConfigModal, Tooltip } from "@/shared/components";
 import Image from "next/image";
 
 const CLOUD_URL = process.env.NEXT_PUBLIC_CLOUD_URL;
@@ -31,6 +31,7 @@ export default function ClaudeToolCard({
   const [modelAliases, setModelAliases] = useState({});
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [ccFilterNaming, setCcFilterNaming] = useState(false);
   const hasInitializedModels = useRef(false);
 
   const getConfigStatus = () => {
@@ -63,6 +64,22 @@ export default function ClaudeToolCard({
     }
     if (isExpanded) fetchModelAliases();
   }, [isExpanded]);
+
+  useEffect(() => {
+    fetch("/api/settings").then(r => r.json()).then(data => {
+      setCcFilterNaming(!!data.ccFilterNaming);
+    }).catch(() => {});
+  }, []);
+
+  const handleCcFilterNamingToggle = async (e) => {
+    const value = e.target.checked;
+    setCcFilterNaming(value);
+    await fetch("/api/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ccFilterNaming: value }),
+    }).catch(() => {});
+  };
 
   const fetchModelAliases = async () => {
     try {
@@ -200,7 +217,7 @@ export default function ClaudeToolCard({
     return [
       {
         filename: "~/.claude/settings.json",
-        content: JSON.stringify({ env }, null, 2),
+        content: JSON.stringify({ hasCompletedOnboarding: true, env }, null, 2),
       },
     ];
   };
@@ -236,16 +253,24 @@ export default function ClaudeToolCard({
 
           {!checkingClaude && claudeStatus && !claudeStatus.installed && (
             <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                <span className="material-symbols-outlined text-yellow-500">warning</span>
-                <div className="flex-1">
-                  <p className="font-medium text-yellow-600 dark:text-yellow-400">Claude CLI not installed</p>
-                  <p className="text-sm text-text-muted">Please install Claude CLI to use this feature.</p>
+              <div className="flex flex-col gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <span className="material-symbols-outlined text-yellow-500">warning</span>
+                  <div className="flex-1">
+                    <p className="font-medium text-yellow-600 dark:text-yellow-400">Claude CLI not detected locally</p>
+                    <p className="text-sm text-text-muted">Manual configuration is still available if 9router is deployed on a remote server.</p>
+                  </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setShowInstallGuide(!showInstallGuide)}>
-                  <span className="material-symbols-outlined text-[18px] mr-1">{showInstallGuide ? "expand_less" : "help"}</span>
-                  {showInstallGuide ? "Hide" : "How to Install"}
-                </Button>
+                <div className="flex items-center gap-2 pl-9">
+                  <Button variant="secondary" size="sm" onClick={() => setShowManualConfigModal(true)} className="!bg-yellow-500/20 !border-yellow-500/40 !text-yellow-700 dark:!text-yellow-300 hover:!bg-yellow-500/30">
+                    <span className="material-symbols-outlined text-[18px] mr-1">content_copy</span>
+                    Manual Config
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowInstallGuide(!showInstallGuide)}>
+                    <span className="material-symbols-outlined text-[18px] mr-1">{showInstallGuide ? "expand_less" : "help"}</span>
+                    {showInstallGuide ? "Hide" : "How to Install"}
+                  </Button>
+                </div>
               </div>
               {showInstallGuide && (
                 <div className="p-4 bg-surface border border-border rounded-lg">
@@ -319,6 +344,19 @@ export default function ClaudeToolCard({
                     {modelMappings[model.alias] && <button onClick={() => onModelMappingChange(model.alias, "")} className="p-1 text-text-muted hover:text-red-500 rounded transition-colors" title="Clear"><span className="material-symbols-outlined text-[14px]">close</span></button>}
                   </div>
                 ))}
+
+                {/* CC Filter Naming */}
+                <div className="flex items-center gap-2">
+                  <span className="w-32 shrink-0 text-sm font-semibold text-text-main text-right">Filter naming</span>
+                  <span className="material-symbols-outlined text-text-muted text-[14px]">arrow_forward</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={ccFilterNaming} onChange={handleCcFilterNamingToggle} className="w-3.5 h-3.5 accent-primary cursor-pointer" />
+                    <span className="text-xs text-text-muted">Filter naming requests</span>
+                  </label>
+                  <Tooltip text="Intercepts Claude Code's topic-naming requests and returns a fake response locally, saving API tokens.">
+                    <span className="material-symbols-outlined text-text-muted text-[14px] cursor-help">info</span>
+                  </Tooltip>
+                </div>
               </div>
 
               {message && (

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { FREE_PROVIDERS } from "@/shared/constants/providers";
 import Badge from "./Badge";
 import Card from "./Card";
 import OverviewCards from "@/app/(dashboard)/dashboard/usage/components/OverviewCards";
@@ -15,6 +16,18 @@ function timeAgo(timestamp) {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
+}
+
+// Auto-update time display every second without re-rendering parent
+function TimeAgo({ timestamp }) {
+  const [, setTick] = useState(0);
+  
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  
+  return <>{timeAgo(timestamp)}</>;
 }
 
 function RecentRequests({ requests = [] }) {
@@ -52,7 +65,7 @@ function RecentRequests({ requests = [] }) {
                       {" "}
                       <span className="text-success">{fmt(r.completionTokens)}↓</span>
                     </td>
-                    <td className="py-1.5 text-right text-text-muted whitespace-nowrap">{timeAgo(r.timestamp)}</td>
+                    <td className="py-1.5 text-right text-text-muted whitespace-nowrap"><TimeAgo timestamp={r.timestamp} /></td>
                   </tr>
                 );
               })}
@@ -179,22 +192,26 @@ export default function UsageStats() {
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [tableView, setTableView] = useState("model");
+  const [viewMode, setViewMode] = useState("costs");
   const [providers, setProviders] = useState([]);
   const [period, setPeriod] = useState("7d");
 
   // Fetch connected providers once, deduplicate by provider type
+  // Always include noAuth free providers (e.g. opencode) regardless of connections
   useEffect(() => {
     fetch("/api/providers")
       .then((r) => r.ok ? r.json() : null)
       .then((d) => {
-        if (!d?.connections) return;
         const seen = new Set();
-        const unique = d.connections.filter((c) => {
+        const unique = (d?.connections || []).filter((c) => {
           if (seen.has(c.provider)) return false;
           seen.add(c.provider);
           return true;
         });
-        setProviders(unique);
+        const noAuthProviders = Object.values(FREE_PROVIDERS)
+          .filter((p) => p.noAuth && !seen.has(p.id))
+          .map((p) => ({ provider: p.id, name: p.name }));
+        setProviders([...unique, ...noAuthProviders]);
       })
       .catch(() => {});
   }, []);
@@ -224,14 +241,14 @@ export default function UsageStats() {
     es.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
-        // Only update real-time fields from SSE, keep filtered stats intact
-        setStats((prev) => prev ? {
-          ...prev,
+        // Always merge only real-time fields, never overwrite full stats from REST
+        setStats((prev) => ({
+          ...(prev || {}),
           activeRequests: data.activeRequests,
           recentRequests: data.recentRequests,
           errorProvider: data.errorProvider,
           pending: data.pending,
-        } : data);
+        }));
         setLoading(false);
       } catch (err) {
         console.error("[SSE CLIENT] parse error:", err);
@@ -431,6 +448,20 @@ export default function UsageStats() {
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
+          <div className="flex items-center gap-1 bg-bg-subtle rounded-lg p-1 border border-border">
+            <button
+              onClick={() => setViewMode("costs")}
+              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${viewMode === "costs" ? "bg-primary text-white shadow-sm" : "text-text-muted hover:text-text hover:bg-bg-hover"}`}
+            >
+              Costs
+            </button>
+            <button
+              onClick={() => setViewMode("tokens")}
+              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${viewMode === "tokens" ? "bg-primary text-white shadow-sm" : "text-text-muted hover:text-text hover:bg-bg-hover"}`}
+            >
+              Tokens
+            </button>
+          </div>
         </div>
         {loading ? spinner : activeTableConfig && (
           <UsageTable
@@ -441,6 +472,7 @@ export default function UsageStats() {
             sortBy={sortBy}
             sortOrder={sortOrder}
             onToggleSort={toggleSort}
+            viewMode={viewMode}
             storageKey={activeTableConfig.storageKey}
             renderSummaryCells={activeTableConfig.renderSummaryCells}
             renderDetailCells={activeTableConfig.renderDetailCells}
